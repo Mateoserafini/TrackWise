@@ -35,8 +35,23 @@ const envSchema = z.object({
     : z
         .string()
         .default('super_secreto_para_firmar_tokens_jwt_32_chars_min'),
-  RESEND_API_KEY: z.string().optional().default(''),
-  EMAIL_FROM: z.string().default('onboarding@resend.dev'),
+  // Configuración SMTP de Nodemailer
+  SMTP_HOST: z.string().optional().default(''),
+  SMTP_PORT: z
+    .string()
+    .optional()
+    .default('587')
+    .transform((val) => parseInt(val, 10))
+    .pipe(z.number().int().positive()),
+  SMTP_SECURE: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((val) => val === 'true'),
+  SMTP_USER: z.string().optional().default(''),
+  SMTP_PASS: z.string().optional().default(''),
+  SMTP_SERVICE: z.string().optional().default(''),
+  EMAIL_FROM: z.string().default('TrackWise <noreply@trackwise.local>'),
   CLIENT_URL: z.string().url().default('http://localhost:3000'),
 });
 

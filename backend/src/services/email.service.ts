@@ -1,56 +1,115 @@
+import nodemailer, { Transporter } from 'nodemailer';
 import { env } from '../config/env';
 
 export class EmailService {
+  private static transporter: Transporter | null = null;
+
   /**
-   * Envía el código OTP de 6 dígitos al correo electrónico provisto.
-   * Si RESEND_API_KEY está configurada, utiliza la API de Resend vía fetch nativo.
-   * De lo contrario o en desarrollo/testing, registra el código en la consola.
+   * Inicializa o devuelve la instancia del transporte de Nodemailer.
+   * Si las credenciales no están configuradas, devuelve null y se usa modo consola.
+   */
+  private static getTransporter(): Transporter | null {
+    if (this.transporter) {
+      return this.transporter;
+    }
+
+    // Requiere usuario y contraseña para no intentar conexiones no autenticadas
+    if (!env.SMTP_USER || !env.SMTP_PASS || env.SMTP_USER.trim() === '' || env.SMTP_PASS.trim() === '') {
+      return null;
+    }
+
+    // Caso 1: Servicio directo (p. ej. Gmail, Outlook, Yahoo)
+    if (env.SMTP_SERVICE && env.SMTP_SERVICE.trim() !== '') {
+      this.transporter = nodemailer.createTransport({
+        service: env.SMTP_SERVICE,
+        auth: {
+          user: env.SMTP_USER,
+          pass: env.SMTP_PASS,
+        },
+      });
+      return this.transporter;
+    }
+
+    // Caso 2: Host y puerto SMTP personalizado
+    if (env.SMTP_HOST && env.SMTP_HOST.trim() !== '') {
+      this.transporter = nodemailer.createTransport({
+        host: env.SMTP_HOST,
+        port: env.SMTP_PORT,
+        secure: env.SMTP_SECURE,
+        auth: {
+          user: env.SMTP_USER,
+          pass: env.SMTP_PASS,
+        },
+      });
+      return this.transporter;
+    }
+
+    return null;
+  }
+
+  /**
+   * Envía el código OTP de 6 dígitos al correo electrónico provisto usando Nodemailer.
+   * Si no hay credenciales SMTP configuradas, emite el código en la consola para desarrollo/testing.
    */
   public static async sendOtpEmail(email: string, otpCode: string): Promise<boolean> {
     console.log(`\n==================================================`);
-    console.log(`📧 [EMAIL / OTP SERVICE] Para: ${email}`);
+    console.log(`📧 [EMAIL / OTP SERVICE (Nodemailer)] Para: ${email}`);
     console.log(`🔑 CÓDIGO DE VERIFICACIÓN: ${otpCode}`);
     console.log(`⏳ Válido por: 15 minutos`);
     console.log(`==================================================\n`);
 
-    if (env.RESEND_API_KEY && env.RESEND_API_KEY.trim() !== '') {
-      try {
-        const response = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${env.RESEND_API_KEY}`,
-          },
-          body: JSON.stringify({
-            from: env.EMAIL_FROM,
-            to: email,
-            subject: 'Tu código de verificación - TrackWise',
-            html: `
-              <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                <h2 style="color: #0f172a; text-align: center;">Bienvenido a TrackWise</h2>
-                <p style="color: #475569;">Usa el siguiente código de 6 dígitos para verificar tu cuenta:</p>
-                <div style="background-color: #f1f5f9; padding: 16px; text-align: center; border-radius: 6px; font-size: 28px; font-weight: bold; letter-spacing: 4px; color: #10b981;">
-                  ${otpCode}
-                </div>
-                <p style="color: #94a3b8; font-size: 13px; margin-top: 20px;">Este código expirará en 15 minutos. Si no solicitaste este registro, puedes ignorar este mensaje.</p>
-              </div>
-            `,
-          }),
-        });
+    const transporter = this.getTransporter();
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('❌ Error al enviar email con Resend:', errorData);
-          return false;
-        }
-
-        return true;
-      } catch (error) {
-        console.error('❌ Fallo de conexión con servicio de correo:', error);
-        return false;
-      }
+    if (!transporter) {
+      console.log('ℹ️ [Nodemailer]: Credenciales SMTP no configuradas. Código emitido en consola.');
+      return true;
     }
 
-    return true;
+    try {
+      const fromAddress = env.EMAIL_FROM || env.SMTP_USER || 'TrackWise <noreply@trackwise.local>';
+
+      const htmlContent = `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; background-color: #121212; border: 1px solid rgba(218, 214, 207, 0.15); border-radius: 16px; color: #DAD6CF;">
+          <div style="text-align: center; margin-bottom: 24px;">
+            <span style="font-family: monospace; font-size: 11px; font-weight: bold; color: #FC2626; letter-spacing: 2px; text-transform: uppercase; background: rgba(252, 38, 38, 0.1); padding: 4px 10px; border-radius: 4px; border: 1px solid rgba(252, 38, 38, 0.2);">
+              SYS // AUTH_VERIFICATION
+            </span>
+            <h1 style="color: #F2EFEB; font-size: 24px; font-weight: 800; margin: 16px 0 8px 0; letter-spacing: -0.5px;">
+              Verificación de Cuenta
+            </h1>
+            <p style="color: #9E9789; font-size: 14px; margin: 0; line-height: 1.5;">
+              Usa el siguiente código de 6 dígitos para autenticar tu acceso en TrackWise:
+            </p>
+          </div>
+
+          <div style="background-color: #1A1A1A; border: 1px solid rgba(218, 214, 207, 0.2); border-radius: 12px; padding: 20px; text-align: center; margin: 24px 0;">
+            <div style="font-family: monospace; font-size: 34px; font-weight: 900; letter-spacing: 8px; color: #10B981; text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);">
+              ${otpCode}
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid rgba(218, 214, 207, 0.1); padding-top: 20px; text-align: center;">
+            <p style="font-family: monospace; font-size: 12px; color: #736D61; margin: 0;">
+              ⏳ Este código expirará en 15 minutos.<br/>
+              Si no intentaste ingresar a TrackWise, puedes ignorar este mensaje de forma segura.
+            </p>
+          </div>
+        </div>
+      `;
+
+      await transporter.sendMail({
+        from: fromAddress,
+        to: email,
+        subject: `${otpCode} es tu código de verificación - TrackWise`,
+        text: `Tu código de verificación de TrackWise es: ${otpCode}\n\nVálido por 15 minutos. Si no lo solicitaste, puedes ignorar este correo.`,
+        html: htmlContent,
+      });
+
+      console.log(`✅ [Nodemailer] Correo de verificación enviado con éxito a ${email}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error al enviar correo con Nodemailer:', error);
+      return false;
+    }
   }
 }

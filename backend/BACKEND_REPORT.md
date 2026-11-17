@@ -140,7 +140,7 @@ Se implementó una suite completa de pruebas E2E en `src/tests/api.test.ts`. El 
    * Declaración de módulo para Express (`express.d.ts`) para tipar `req.user: AuthUser` de forma transparente.
 
 2. **Cero Dependencias Innecesarias (Regla #3)**:
-   * **Servicio de Email**: En lugar de requerir paquetes externos pesados para Resend, se implementó el envío mediante la API HTTP de Resend utilizando el `fetch` nativo de Node.js, con fallback a consola interactiva en desarrollo y testing.
+   * **Servicio de Email**: Se implementó el envío de correos mediante **Nodemailer**, permitiendo usar cualquier cuenta SMTP estándar (Gmail, Outlook, Yahoo o servidores propios) sin exigir dominios corporativos privados. Incluye fallback automático a consola interactiva en desarrollo y testing.
    * **Testing Framework**: Se implementó el runner E2E sin necesidad de instalar Jest, Mocha o Supertest, utilizando sockets nativos de Node.js y `fetch`, garantizando máxima velocidad y portabilidad.
 
 3. **Cálculo Inteligente de Rachas (*Streaks*)**:
@@ -175,9 +175,13 @@ PORT=5000
 NODE_ENV=development
 DATABASE_URL=postgresql://tu_usuario:tu_contraseña@ep-xyz.us-east-2.aws.neon.tech/neondb?sslmode=require
 JWT_SECRET=super_secreto_para_firmar_tokens_jwt_32_chars_min
-RESEND_API_KEY=
-EMAIL_FROM=onboarding@resend.dev
 CLIENT_URL=http://localhost:3000
+
+# Configuración Nodemailer (ejemplo con Gmail)
+SMTP_SERVICE=gmail
+SMTP_USER=tu_correo@gmail.com
+SMTP_PASS=tu_app_password_google
+EMAIL_FROM="TrackWise <tu_correo@gmail.com>"
 ```
 
 ### 4.3 Comandos Disponibles
